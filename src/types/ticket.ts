@@ -1,3 +1,5 @@
+import { Client } from "@/types/client";
+
 export interface Ticket {
   id: string;
   clientName: string;
@@ -5,5 +7,13 @@ export interface Ticket {
   channel: "whatsapp" | "email" | "chat";
   status: "novo" | "em_andamento" | "resolvido";
   priority: "baixa" | "media" | "alta";
-  lastUpdate: string;
+  lastUpdate?: string;
+  messages?: {
+    message: string;
+    timestamp?: string;
+    fromClient: boolean;
+  }[];
+  createdAt?: string;
+  updatedAt?: string;
+  client?: Client;
 }

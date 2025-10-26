@@ -39,11 +39,29 @@ const priorityLabels = {
   alta: "Alta",
 };
 
+const formatLastUpdate = (value?: string) => {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : parsed.toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+};
+
 export const TicketList = ({ tickets, onTicketClick }: TicketListProps) => {
   return (
     <div className="space-y-3">
       {tickets.map((ticket) => {
         const ChannelIcon = channelIcons[ticket.channel];
+        const displayName =
+          ticket.client?.name ||
+          ticket.clientName ||
+          ticket.client?.whatsapp ||
+          ticket.client?.email ||
+          "Cliente";
+        const contactInfo = ticket.client?.email || ticket.client?.whatsapp;
         return (
           <Card
             key={ticket.id}
@@ -57,18 +75,36 @@ export const TicketList = ({ tickets, onTicketClick }: TicketListProps) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-foreground truncate">{ticket.clientName}</h3>
-                    <Badge className={cn("text-xs", statusColors[ticket.status])}>
+                    <div className="flex flex-col">
+                      <h3 className="font-semibold text-foreground truncate">
+                        {displayName}
+                      </h3>
+                      {contactInfo && (
+                        <span className="text-xs text-muted-foreground truncate">
+                          {contactInfo}
+                        </span>
+                      )}
+                    </div>
+                    <Badge
+                      className={cn("text-xs", statusColors[ticket.status])}
+                    >
                       {statusLabels[ticket.status]}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground truncate mb-2">{ticket.subject}</p>
+                  <p className="text-sm text-muted-foreground truncate mb-2">
+                    {ticket.subject}
+                  </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline" className={priorityColors[ticket.priority]}>
+                    <Badge
+                      variant="outline"
+                      className={priorityColors[ticket.priority]}
+                    >
                       {priorityLabels[ticket.priority]}
                     </Badge>
                     <span>•</span>
-                    <span>{ticket.lastUpdate}</span>
+                    <span>
+                      {formatLastUpdate(ticket.lastUpdate ?? ticket.updatedAt)}
+                    </span>
                   </div>
                 </div>
               </div>
