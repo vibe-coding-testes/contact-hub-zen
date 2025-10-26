@@ -1,73 +1,137 @@
-# Welcome to your Lovable project
+# Contact Hub
 
-## Project info
+Aplicação full-stack para centralizar o atendimento multicanal (WhatsApp e e-mail) em um único painel. O repositório contém um frontend em React/Vite e um backend em Node.js/Express que integra MongoDB, Twilio e webhooks externos.
 
-**URL**: https://lovable.dev/projects/b7837bac-6e75-4d08-bdb4-24077476e8ef
+## Visão geral
 
-## How can I edit this code?
+- **Frontend**: React + TypeScript + Vite + Tailwind + shadcn/ui (pasta raiz `src/`).
+- **Backend**: Express + Mongoose (pasta `backend/`).
+- **Banco de dados**: MongoDB Atlas.
+- **Integrações**: Twilio WhatsApp webhook (recepção e envio); endpoint para e-mails via webhook.
 
-There are several ways of editing your application.
+## Requisitos
 
-**Use Lovable**
+- Node.js 18 ou superior e npm.
+- Conta no MongoDB Atlas com string de conexão válida.
+- Conta Twilio com canal WhatsApp configurado (sandbox ou número próprio).
+- Opcional: serviço de webhook para e-mail (SendGrid Inbound Parse, Mailgun Routes, Postmark Inbound etc.).
+- Opcional: ngrok (ou similar) para expor o backend durante o desenvolvimento.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/b7837bac-6e75-4d08-bdb4-24077476e8ef) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Setup rápido
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone <url-do-repositorio>
+cd contact-hub-zen
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Instalar dependências do frontend
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Instalar dependências do backend
+cd backend
+npm install
+cd ..
 ```
 
-**Edit a file directly in GitHub**
+### Variáveis de ambiente
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Crie `backend/.env` com os seguintes valores:
 
-**Use GitHub Codespaces**
+```env
+PORT=5001
+MONGODB_URI=<sua-connection-string>
+MONGODB_DB_NAME=contacthub
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+TWILIO_ACCOUNT_SID=<sid>
+TWILIO_AUTH_TOKEN=<token>
+TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886 # ou seu número habilitado
+```
 
-## What technologies are used for this project?
+> Garanta que o usuário do MongoDB tenha permissão `readWrite` no banco.
 
-This project is built with:
+Se quiser controlar o frontend com variáveis (ex.: URL do backend diferente), crie `src/.env` ou atualize `src/services/api.ts`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Execução em desenvolvimento
 
-## How can I deploy this project?
+Em terminais separados:
 
-Simply open [Lovable](https://lovable.dev/projects/b7837bac-6e75-4d08-bdb4-24077476e8ef) and click on Share -> Publish.
+```sh
+# Backend (a partir da pasta raiz)
+cd backend
+npm run dev
 
-## Can I connect a custom domain to my Lovable project?
+# Frontend
+cd ..
 
-Yes, you can!
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+O frontend abre em `http://localhost:5173` e o backend expõe a API em `http://localhost:5001/api`.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Webhook do WhatsApp
+
+1. Execute o backend localmente.
+2. Inicie o ngrok (ou similar) apontando para a porta do backend: `ngrok http 5001`.
+3. Na Twilio Console, configure a URL de webhook de entrada para `https://<seu-ngrok>/api/integrations/whatsapp`.
+4. Envie uma mensagem para o número associado; um ticket é criado/atualizado automaticamente.
+
+### Webhook de e-mail (opcional)
+
+O endpoint `POST /api/integrations/email` espera um corpo JSON ou `application/x-www-form-urlencoded` com `from`, `subject` e `text`. Configure seu provedor para enviar esses campos. Caso ele envie `multipart/form-data`, adapte o backend (ex.: adicionando `multer`).
+
+## Estrutura de pastas
+
+```
+.
+├── backend/
+│   ├── controllers/
+│   │   └── twilioController.js
+│   ├── models/
+│   │   ├── Client.js
+│   │   └── Ticket.js
+│   ├── routes/
+│   │   ├── integrations.js
+│   │   └── tickets.js
+│   └── server.js
+├── src/
+│   ├── components/
+│   ├── pages/
+│   ├── services/api.ts
+│   └── ...
+└── README.md
+```
+
+## Fluxo principal
+
+1. **Recepção de mensagens**: webhooks (WhatsApp/e-mail) procuram o cliente no MongoDB, criam se necessário e adicionam a mensagem ao ticket aberto (ou criam um ticket novo).
+2. **Portal web**: lista tickets com status, assunto e tópico; painel lateral mostra histórico resumido, permite marcar como resolvido/reabrir, alterar tópico e visualizar todas as mensagens.
+3. **Respostas**: há endpoint `POST /api/integrations/whatsapp/send` para disparo manual via Twilio. Envio de e-mail ainda não está implementado.
+
+## Endpoints úteis (backend)
+
+- `GET /api/tickets` – lista tickets ordenados por atualização.
+- `GET /api/tickets/:id`
+- `POST /api/tickets` – cria ticket manualmente.
+- `PUT /api/tickets/:id` – atualiza dados (inclui tópico, prioridade etc.).
+- `PATCH /api/tickets/:id/status` – altera status (`novo`, `em_andamento`, `resolvido`).
+- `POST /api/tickets/:id/messages` – adiciona mensagem a um ticket.
+- `POST /api/integrations/whatsapp` – webhook Twilio.
+- `POST /api/integrations/whatsapp/send` – envia resposta via Twilio.
+- `POST /api/integrations/email` – webhook para e-mails.
+
+## Build e produção
+
+O projeto ainda não possui pipeline automatizado. Para deploy manual:
+
+1. Configure variáveis de ambiente conforme acima.
+2. Faça build do frontend: `npm run build` (gera `dist/`).
+3. Sirva o frontend via Vite preview, Nginx, Vercel etc. O backend pode ser publicado no mesmo servidor (Node) ou em serviços como Render, Railway ou Heroku.
+4. Atualize as URLs dos webhooks (Twilio/serviço de e-mail) para apontar para o host público.
+
+## Contribuição
+
+1. Crie uma branch.
+2. Faça as alterações com testes manuais (enviar mensagens, alterar status).
+3. Abra um pull request descrevendo o impacto e como testar.
+
+## Licença
+
+Este repositório não possui licença explícita. Adicione uma licença (ex.: MIT) se desejar compartilhar ou reutilizar o código.

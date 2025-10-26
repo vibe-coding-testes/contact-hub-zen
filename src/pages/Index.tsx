@@ -1,83 +1,139 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { TicketList } from "@/components/TicketList";
 import { ClientHistory } from "@/components/ClientHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, CheckCircle2, Users, TrendingUp } from "lucide-react";
 import { Ticket } from "@/types/ticket";
-
-const mockTickets: Ticket[] = [
-  {
-    id: "1",
-    clientName: "Maria Silva",
-    subject: "Dúvida sobre produto XYZ",
-    channel: "whatsapp" as const,
-    status: "novo" as const,
-    priority: "alta" as const,
-    lastUpdate: "Há 5 minutos",
-  },
-  {
-    id: "2",
-    clientName: "João Santos",
-    subject: "Solicitação de reembolso",
-    channel: "email" as const,
-    status: "em_andamento" as const,
-    priority: "media" as const,
-    lastUpdate: "Há 1 hora",
-  },
-  {
-    id: "3",
-    clientName: "Ana Costa",
-    subject: "Problema com entrega",
-    channel: "chat" as const,
-    status: "resolvido" as const,
-    priority: "baixa" as const,
-    lastUpdate: "Há 3 horas",
-  },
-  {
-    id: "4",
-    clientName: "Carlos Oliveira",
-    subject: "Informações sobre garantia",
-    channel: "whatsapp" as const,
-    status: "novo" as const,
-    priority: "media" as const,
-    lastUpdate: "Há 30 minutos",
-  },
-];
-
-const mockHistory = [
-  {
-    id: "1",
-    channel: "whatsapp" as const,
-    message: "Cliente solicitou informações sobre produto XYZ",
-    timestamp: "Hoje, 14:30",
-    status: "novo" as const,
-  },
-  {
-    id: "2",
-    channel: "email" as const,
-    message: "Enviado catálogo de produtos solicitado",
-    timestamp: "Ontem, 09:15",
-    status: "resolvido" as const,
-  },
-  {
-    id: "3",
-    channel: "chat" as const,
-    message: "Dúvida sobre formas de pagamento",
-    timestamp: "15/10/2025, 16:45",
-    status: "resolvido" as const,
-  },
-];
+import { getTickets, updateTicketStatus, updateTicket } from "@/services/api";
 
 const Index = () => {
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [topicLoading, setTopicLoading] = useState(false);
+
+  const fetchTickets = useCallback(async (withSpinner = false) => {
+    if (withSpinner) {
+      setLoading(true);
+    }
+    try {
+      const response = await getTickets();
+      setTickets(response.data);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    } finally {
+      if (withSpinner) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const wrappedFetch = async (withSpinner = false) => {
+      if (!isMounted) return;
+      await fetchTickets(withSpinner);
+    };
+
+    wrappedFetch(true);
+    const intervalId = setInterval(() => wrappedFetch(false), 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [fetchTickets]);
+
+  const selectedTicket = useMemo(() => {
+    if (!selectedTicketId) return null;
+    return tickets.find((ticket) => ticket.id === selectedTicketId) ?? null;
+  }, [tickets, selectedTicketId]);
+
+  const formatTimestamp = (value?: string) => {
+    if (!value) return "--";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        });
+  };
+
+  const ticketHistory = useMemo(() => {
+    if (!selectedTicket?.messages?.length) return [];
+
+    return [...selectedTicket.messages]
+      .map((msg, index) => ({
+        id: `${selectedTicket.id}-${index}`,
+        channel: selectedTicket.channel,
+        message: msg.message,
+        timestamp: formatTimestamp(msg.timestamp),
+        status: selectedTicket.status,
+        fromClient: msg.fromClient ?? true,
+        sortKey: new Date(
+          msg.timestamp ?? selectedTicket.updatedAt ?? 0
+        ).getTime(),
+      }))
+      .sort((a, b) => b.sortKey - a.sortKey)
+      .map(({ sortKey, ...rest }) => rest);
+  }, [selectedTicket]);
+
+  useEffect(() => {
+    if (selectedTicketId || tickets.length === 0) return;
+    setSelectedTicketId(tickets[0].id);
+  }, [tickets, selectedTicketId]);
+
+  useEffect(() => {
+    setStatusLoading(false);
+    setTopicLoading(false);
+  }, [selectedTicketId]);
+
+  const handleToggleStatus = useCallback(async () => {
+    if (!selectedTicket) return;
+    setStatusLoading(true);
+    try {
+      const nextStatus =
+        selectedTicket.status === "resolvido" ? "em_andamento" : "resolvido";
+      await updateTicketStatus(selectedTicket.id, nextStatus);
+      await fetchTickets();
+    } catch (error) {
+      console.error("Error updating ticket status:", error);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [selectedTicket, fetchTickets]);
+
+  const handleTopicChange = useCallback(
+    async (topic: string) => {
+      if (!selectedTicket) return;
+      if (selectedTicket.topic === topic) return;
+      setTopicLoading(true);
+      try {
+        await updateTicket(selectedTicket.id, { topic });
+        await fetchTickets();
+      } catch (error) {
+        console.error("Error updating ticket topic:", error);
+      } finally {
+        setTopicLoading(false);
+      }
+    },
+    [selectedTicket, fetchTickets]
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card shadow-[var(--shadow-card)]">
         <div className="container mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Sistema de Atendimento Multicanal</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gestão unificada de tickets e clientes</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            Sistema de Atendimento Multicanal
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gestão unificada de tickets e clientes
+          </p>
         </div>
       </header>
 
@@ -119,25 +175,44 @@ const Index = () => {
                 <TabsTrigger value="chat">Chat Web</TabsTrigger>
               </TabsList>
               <TabsContent value="todos">
-                <TicketList tickets={mockTickets} onTicketClick={setSelectedTicket} />
+                {loading ? (
+                  <p>Loading...</p>
+                ) : (
+                  <TicketList
+                    tickets={tickets}
+                    onTicketClick={(ticket) => setSelectedTicketId(ticket.id)}
+                  />
+                )}
               </TabsContent>
               <TabsContent value="whatsapp">
-                <TicketList 
-                  tickets={mockTickets.filter(t => t.channel === "whatsapp")} 
-                  onTicketClick={setSelectedTicket}
-                />
+                {loading ? (
+                  <p>Loading...</p>
+                ) : (
+                  <TicketList
+                    tickets={tickets.filter((t) => t.channel === "whatsapp")}
+                    onTicketClick={(ticket) => setSelectedTicketId(ticket.id)}
+                  />
+                )}
               </TabsContent>
               <TabsContent value="email">
-                <TicketList 
-                  tickets={mockTickets.filter(t => t.channel === "email")} 
-                  onTicketClick={setSelectedTicket}
-                />
+                {loading ? (
+                  <p>Loading...</p>
+                ) : (
+                  <TicketList
+                    tickets={tickets.filter((t) => t.channel === "email")}
+                    onTicketClick={(ticket) => setSelectedTicketId(ticket.id)}
+                  />
+                )}
               </TabsContent>
               <TabsContent value="chat">
-                <TicketList 
-                  tickets={mockTickets.filter(t => t.channel === "chat")} 
-                  onTicketClick={setSelectedTicket}
-                />
+                {loading ? (
+                  <p>Loading...</p>
+                ) : (
+                  <TicketList
+                    tickets={tickets.filter((t) => t.channel === "chat")}
+                    onTicketClick={(ticket) => setSelectedTicketId(ticket.id)}
+                  />
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -145,9 +220,24 @@ const Index = () => {
           <div>
             {selectedTicket ? (
               <ClientHistory
-                clientName={selectedTicket.clientName}
-                clientEmail={`${selectedTicket.clientName.toLowerCase().replace(" ", ".")}@email.com`}
-                history={mockHistory}
+                clientName={
+                  selectedTicket.client?.name ||
+                  selectedTicket.clientName ||
+                  selectedTicket.client?.whatsapp ||
+                  "Cliente"
+                }
+                clientEmail={selectedTicket.client?.email}
+                clientPhone={
+                  selectedTicket.client?.whatsapp ||
+                  selectedTicket.client?.phones?.[0]
+                }
+                history={ticketHistory}
+                ticketStatus={selectedTicket.status}
+                ticketTopic={selectedTicket.topic}
+                onToggleStatus={handleToggleStatus}
+                onTopicChange={handleTopicChange}
+                statusLoading={statusLoading}
+                topicLoading={topicLoading}
               />
             ) : (
               <div className="rounded-lg border bg-card p-8 text-center shadow-[var(--shadow-card)]">
