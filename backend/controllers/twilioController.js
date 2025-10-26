@@ -109,6 +109,8 @@ const receiveWhatsAppMessage = async (req, res) => {
     }
     console.log("Ticket encontrado:", ticket ? ticket._id : "Nenhum");
 
+    const defaultTopic = "suporte";
+
     if (!ticket) {
       // Criar novo ticket
       console.log("Criando novo ticket...");
@@ -116,6 +118,7 @@ const receiveWhatsAppMessage = async (req, res) => {
         client: client._id,
         clientName: displayName,
         subject: `Mensagem WhatsApp de ${displayName}`,
+        topic: defaultTopic,
         channel: "whatsapp",
         lastUpdate: new Date().toISOString(),
         messages: [{ message, fromClient: true }],
@@ -127,6 +130,13 @@ const receiveWhatsAppMessage = async (req, res) => {
       ticket.messages.push({ message, fromClient: true });
       ticket.lastUpdate = new Date().toISOString();
       ticket.clientName = displayName;
+      if (
+        !ticket.topic ||
+        ticket.topic === "whatsapp" ||
+        ticket.topic === "email"
+      ) {
+        ticket.topic = defaultTopic;
+      }
       console.log("Ticket atualizado:", ticket);
     }
 

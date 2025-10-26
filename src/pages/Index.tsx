@@ -1,41 +1,51 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { TicketList } from "@/components/TicketList";
 import { ClientHistory } from "@/components/ClientHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, CheckCircle2, Users, TrendingUp } from "lucide-react";
 import { Ticket } from "@/types/ticket";
-import { getTickets } from "@/services/api";
+import { getTickets, updateTicketStatus, updateTicket } from "@/services/api";
 
 const Index = () => {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [topicLoading, setTopicLoading] = useState(false);
+
+  const fetchTickets = useCallback(async (withSpinner = false) => {
+    if (withSpinner) {
+      setLoading(true);
+    }
+    try {
+      const response = await getTickets();
+      setTickets(response.data);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    } finally {
+      if (withSpinner) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchTickets = async () => {
-      try {
-        const response = await getTickets();
-        if (!isMounted) return;
-        setTickets(response.data);
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+    const wrappedFetch = async (withSpinner = false) => {
+      if (!isMounted) return;
+      await fetchTickets(withSpinner);
     };
-    fetchTickets();
-    const intervalId = setInterval(fetchTickets, 5000);
+
+    wrappedFetch(true);
+    const intervalId = setInterval(() => wrappedFetch(false), 5000);
 
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, []);
+  }, [fetchTickets]);
 
   const selectedTicket = useMemo(() => {
     if (!selectedTicketId) return null;
@@ -56,20 +66,63 @@ const Index = () => {
   const ticketHistory = useMemo(() => {
     if (!selectedTicket?.messages?.length) return [];
 
-    return selectedTicket.messages.map((msg, index) => ({
-      id: `${selectedTicket.id}-${index}`,
-      channel: selectedTicket.channel,
-      message: msg.message,
-      timestamp: formatTimestamp(msg.timestamp),
-      status: selectedTicket.status,
-      fromClient: msg.fromClient ?? true,
-    }));
+    return [...selectedTicket.messages]
+      .map((msg, index) => ({
+        id: `${selectedTicket.id}-${index}`,
+        channel: selectedTicket.channel,
+        message: msg.message,
+        timestamp: formatTimestamp(msg.timestamp),
+        status: selectedTicket.status,
+        fromClient: msg.fromClient ?? true,
+        sortKey: new Date(
+          msg.timestamp ?? selectedTicket.updatedAt ?? 0
+        ).getTime(),
+      }))
+      .sort((a, b) => b.sortKey - a.sortKey)
+      .map(({ sortKey, ...rest }) => rest);
   }, [selectedTicket]);
 
   useEffect(() => {
     if (selectedTicketId || tickets.length === 0) return;
     setSelectedTicketId(tickets[0].id);
   }, [tickets, selectedTicketId]);
+
+  useEffect(() => {
+    setStatusLoading(false);
+    setTopicLoading(false);
+  }, [selectedTicketId]);
+
+  const handleToggleStatus = useCallback(async () => {
+    if (!selectedTicket) return;
+    setStatusLoading(true);
+    try {
+      const nextStatus =
+        selectedTicket.status === "resolvido" ? "em_andamento" : "resolvido";
+      await updateTicketStatus(selectedTicket.id, nextStatus);
+      await fetchTickets();
+    } catch (error) {
+      console.error("Error updating ticket status:", error);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [selectedTicket, fetchTickets]);
+
+  const handleTopicChange = useCallback(
+    async (topic: string) => {
+      if (!selectedTicket) return;
+      if (selectedTicket.topic === topic) return;
+      setTopicLoading(true);
+      try {
+        await updateTicket(selectedTicket.id, { topic });
+        await fetchTickets();
+      } catch (error) {
+        console.error("Error updating ticket topic:", error);
+      } finally {
+        setTopicLoading(false);
+      }
+    },
+    [selectedTicket, fetchTickets]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -179,6 +232,12 @@ const Index = () => {
                   selectedTicket.client?.phones?.[0]
                 }
                 history={ticketHistory}
+                ticketStatus={selectedTicket.status}
+                ticketTopic={selectedTicket.topic}
+                onToggleStatus={handleToggleStatus}
+                onTopicChange={handleTopicChange}
+                statusLoading={statusLoading}
+                topicLoading={topicLoading}
               />
             ) : (
               <div className="rounded-lg border bg-card p-8 text-center shadow-[var(--shadow-card)]">

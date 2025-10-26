@@ -37,6 +37,7 @@ router.post("/", async (req, res) => {
       status,
       priority,
       messages,
+      topic,
     } = req.body;
 
     const ticket = new Ticket({
@@ -44,6 +45,7 @@ router.post("/", async (req, res) => {
       channel,
       status: status || "novo",
       priority: priority || "media",
+      topic: topic || "geral",
       messages: messages || [],
     });
 
@@ -84,6 +86,7 @@ router.put("/:id", async (req, res) => {
       ticket.clientName = req.body.clientName;
     }
     if (req.body.subject) ticket.subject = req.body.subject;
+    if (req.body.topic) ticket.topic = req.body.topic;
     if (req.body.channel) ticket.channel = req.body.channel;
     if (req.body.status) ticket.status = req.body.status;
     if (req.body.priority) ticket.priority = req.body.priority;
@@ -119,8 +122,34 @@ router.post("/:id/messages", async (req, res) => {
 
     ticket.messages.push({
       message: req.body.message,
-      fromClient: req.body.fromClient || true,
+      fromClient:
+        typeof req.body.fromClient === "boolean" ? req.body.fromClient : true,
     });
+    if (req.body.topic) {
+      ticket.topic = req.body.topic;
+    }
+    ticket.lastUpdate = new Date().toISOString();
+
+    const updatedTicket = await ticket.save();
+    const populatedTicket = await updatedTicket.populate("client");
+    res.json(populatedTicket);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// PATCH update status only
+router.patch("/:id/status", async (req, res) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ message: "Status is required" });
+    }
+
+    ticket.status = status;
     ticket.lastUpdate = new Date().toISOString();
 
     const updatedTicket = await ticket.save();

@@ -8,6 +8,7 @@ export interface Ticket {
   status: "novo" | "em_andamento" | "resolvido";
   priority: "baixa" | "media" | "alta";
   lastUpdate?: string;
+  topic?: string;
   messages?: {
     message: string;
     timestamp?: string;

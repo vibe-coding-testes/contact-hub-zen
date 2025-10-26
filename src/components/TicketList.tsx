@@ -39,6 +39,13 @@ const priorityLabels = {
   alta: "Alta",
 };
 
+const topicLabels: Record<string, string> = {
+  geral: "Geral",
+  suporte: "Suporte",
+  comercial: "Comercial",
+  financeiro: "Financeiro",
+};
+
 const formatLastUpdate = (value?: string) => {
   if (!value) return "--";
   const parsed = new Date(value);
@@ -51,9 +58,14 @@ const formatLastUpdate = (value?: string) => {
 };
 
 export const TicketList = ({ tickets, onTicketClick }: TicketListProps) => {
+  const orderedTickets = [...tickets].sort((a, b) => {
+    const aDate = new Date(a.lastUpdate ?? a.updatedAt ?? 0).getTime();
+    const bDate = new Date(b.lastUpdate ?? b.updatedAt ?? 0).getTime();
+    return bDate - aDate;
+  });
   return (
     <div className="space-y-3">
-      {tickets.map((ticket) => {
+      {orderedTickets.map((ticket) => {
         const ChannelIcon = channelIcons[ticket.channel];
         const displayName =
           ticket.client?.name ||
@@ -91,9 +103,17 @@ export const TicketList = ({ tickets, onTicketClick }: TicketListProps) => {
                       {statusLabels[ticket.status]}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground truncate mb-2">
-                    {ticket.subject}
-                  </p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground truncate mb-2">
+                    <span className="truncate">{ticket.subject}</span>
+                    {ticket.topic &&
+                      !["geral", "whatsapp", "email", "chat"].includes(
+                        ticket.topic
+                      ) && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {topicLabels[ticket.topic] || ticket.topic}
+                        </Badge>
+                      )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Badge
                       variant="outline"

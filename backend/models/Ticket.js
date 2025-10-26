@@ -10,6 +10,7 @@ const ticketSchema = new mongoose.Schema(
       },
     },
     subject: { type: String, required: true },
+    topic: { type: String, default: "geral" },
     channel: {
       type: String,
       enum: ["whatsapp", "email", "chat"],

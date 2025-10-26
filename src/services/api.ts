@@ -13,6 +13,8 @@ export const createTicket = (data: Partial<Ticket>) =>
   api.post<Ticket>("/tickets", data);
 export const updateTicket = (id: string, data: Partial<Ticket>) =>
   api.put<Ticket>(`/tickets/${id}`, data);
+export const updateTicketStatus = (id: string, status: Ticket["status"]) =>
+  api.patch<Ticket>(`/tickets/${id}/status`, { status });
 export const deleteTicket = (id: string) => api.delete(`/tickets/${id}`);
 export const addMessageToTicket = (
   id: string,

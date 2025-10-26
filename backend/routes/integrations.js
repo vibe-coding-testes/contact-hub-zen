@@ -59,11 +59,13 @@ router.post("/email", async (req, res) => {
     }
 
     let ticket = await Ticket.findOne(ticketQuery);
+    const defaultTopic = "suporte";
     if (!ticket) {
       ticket = new Ticket({
         client: client ? client._id : undefined,
         clientName: client?.name || from,
         subject,
+        topic: defaultTopic,
         channel: "email",
         messages: [{ message: text, fromClient: true }],
       });
@@ -72,6 +74,13 @@ router.post("/email", async (req, res) => {
       ticket.lastUpdate = new Date().toISOString();
       if (client && ticket.clientName !== client.name) {
         ticket.clientName = client.name || ticket.clientName;
+      }
+      if (
+        !ticket.topic ||
+        ticket.topic === "email" ||
+        ticket.topic === "whatsapp"
+      ) {
+        ticket.topic = defaultTopic;
       }
     }
 
